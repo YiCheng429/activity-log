@@ -1,4 +1,4 @@
-name: CI Dev Deployment
+name: CI/CD Deployment Pipeline
 
 on:
   push:
@@ -42,7 +42,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ vars.BUILD_TAG }}
+          TAG: ${{ vars.BUILD_TAG }}-${{ github.run_number }}
           NOTE: ${{ vars.RELEASE_NOTE }}
         run: |
-          gh release create "$TAG" build.zip --notes "$NOTE"
+          gh release create "$TAG" build.zip --title "$TAG" --notes "$NOTE"
+
+  deploy-staging:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Release Staging Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ vars.BUILD_TAG }}-${{ github.run_number }}
+          NOTE: ${{ vars.RELEASE_NOTE }}
+        run: |
+          gh release create "$TAG" build.zip --title "$TAG" --notes "$NOTE"
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Release Production Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ vars.BUILD_TAG }}-${{ github.run_number }}
+          NOTE: ${{ vars.RELEASE_NOTE }}
+        run: |
+          gh release create "$TAG" build.zip --title "$TAG" --notes "$NOTE"
