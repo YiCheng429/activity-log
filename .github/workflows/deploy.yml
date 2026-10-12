@@ -1,3 +1,99 @@
+name: CI/CD Deployment Pipeline
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Checkout (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump patch version
+        id: bump
+        run: |
+          LAST=$(git tag --list 'dev-v*.*.*' --sort=-v:refname | head -n1)
+          if [ -z "$LAST" ]; then
+            VERSION="1.0.0"
+          else
+            V="${LAST#dev-v}"
+            IFS=. read -r MAJOR MINOR PATCH <<< "$V"
+            VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          fi
+          echo "Last tag: ${LAST:-none} -> New version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Build
+        run: |
+          bun run build
+          zip -r build.zip dist
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: build.zip
+
+  deploy-dev:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Release Dev Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: dev-v${{ needs.version.outputs.version }}
+          BUILD_TAG: ${{ vars.BUILD_TAG }}
+          NOTE: ${{ vars.RELEASE_NOTE }}
+        run: |
+          gh release create "$TAG" build.zip --title "$TAG" \
+            --notes "$NOTE (build tag: $BUILD_TAG)"
+
+  deploy-staging:
+    needs: [version, deploy-dev]
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Release Staging Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: staging-v${{ needs.version.outputs.version }}
+          BUILD_TAG: ${{ vars.BUILD_TAG }}
+          NOTE: ${{ vars.RELEASE_NOTE }}
+        run: |
+          gh release create "$TAG" build.zip --title "$TAG" \
+            --notes "$NOTE (build tag: $BUILD_TAG)"
+
   release-notes:
     needs: deploy-staging
     runs-on: ubuntu-latest
@@ -63,3 +159,34 @@
         with:
           name: ai-release-notes
           path: ai-release-notes.md
+
+  deploy-production:
+    needs: [version, release-notes]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Release Production Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: prod-v${{ needs.version.outputs.version }}
+          BUILD_TAG: ${{ vars.BUILD_TAG }}
+          NOTE: ${{ vars.RELEASE_NOTE }}
+        run: |
+          gh release create "$TAG" build.zip --title "$TAG" \
+            --notes "$NOTE (build tag: $BUILD_TAG)"
+
+      - name: Notify via commit comment
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: prod-v${{ needs.version.outputs.version }}
+        run: |
+          gh api "repos/$GH_REPO/commits/${{ github.sha }}/comments" \
+            -f body="🚀 Released **$TAG** to production. https://github.com/$GH_REPO/releases/tag/$TAG"
