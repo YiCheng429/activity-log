@@ -138,13 +138,18 @@ jobs:
             -H "content-type: application/json" \
             -d @request.json)
           echo "HTTP status: $STATUS"
+          echo "Raw response:"; head -c 2000 response.json; echo
 
           if [ "$STATUS" != "200" ]; then
-            echo "Response:"; cat response.json
             exit 1
           fi
 
-          jq -r '.content[0].text' response.json > ai-release-notes.md
+          jq -r '[.content[] | select(.type == "text") | .text] | join("\n")' response.json > ai-release-notes.md
+
+          if ! grep -q '[^[:space:]]' ai-release-notes.md || grep -qx 'null' ai-release-notes.md; then
+            echo "AI output is empty or null, stopping before production."
+            exit 1
+          fi
           cat ai-release-notes.md
 
       - name: Show notes for reviewer
