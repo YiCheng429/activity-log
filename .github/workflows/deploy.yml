@@ -5,6 +5,12 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+# Merges that land back to back would otherwise read the same last tag and
+# try to create the same release; queue them instead of running in parallel.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   version:
     runs-on: ubuntu-latest
