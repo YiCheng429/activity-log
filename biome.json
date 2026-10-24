@@ -1,0 +1,25 @@
+{
+    "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+    "files": { "include": ["src/**/*.js", "tests/**/*.js"] },
+    "formatter": { "enabled": false },
+    "organizeImports": { "enabled": false },
+    "javascript": { "globals": ["process"] },
+    "linter": {
+        "enabled": true,
+        "rules": {
+            "recommended": false,
+            "correctness": {
+                "noUndeclaredVariables": "error",
+                "noUnusedVariables": "error",
+                "noUnusedImports": "error",
+                "noUnreachable": "error",
+                "noInvalidUseBeforeDeclaration": "error"
+            },
+            "suspicious": {
+                "noDoubleEquals": "error",
+                "noRedeclare": "error",
+                "noDuplicateObjectKeys": "error"
+            }
+        }
+    }
+}

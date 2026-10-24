@@ -1,0 +1,30 @@
+name: Guard master
+
+# Scripted check: every commit that lands on master must belong to a merged PR into master.
+# Catches admin bypass pushes and non-PR merges that branch protection lets through.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Commit SHA to verify (e.g. an old direct-push commit, to demo a failure)"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  verify-pr-origin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Every new commit on master must come from a merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.event.inputs.sha || github.sha }}
+        run: bash scripts/verify-pr-origin.sh

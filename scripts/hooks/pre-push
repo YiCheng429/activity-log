@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Local guard: block pushes to master unless ALLOW_MASTER_PUSH=1, and even then only fast-forwards.
+# Feature branches may still be force-pushed (needed after a rebase).
+# Install with: git config core.hooksPath scripts/hooks
+zero=0000000000000000000000000000000000000000
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$remote_ref" = "refs/heads/master" ] || continue
+
+  if [ "${ALLOW_MASTER_PUSH:-0}" != "1" ]; then
+    echo "pre-push: direct push to master is blocked. Open a pull request instead." >&2
+    exit 1
+  fi
+  if [ "$local_sha" = "$zero" ]; then
+    echo "pre-push: deleting master is blocked." >&2
+    exit 1
+  fi
+  if [ "$remote_sha" != "$zero" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    echo "pre-push: $local_ref is not a fast-forward of master ($remote_sha). Refusing." >&2
+    exit 1
+  fi
+  echo "pre-push: fast-forward of master to $local_sha allowed (ALLOW_MASTER_PUSH=1)." >&2
+done
+exit 0

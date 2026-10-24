@@ -51,7 +51,7 @@ function applyTemplate(template, data) {
     return normalizeRenderedTemplate(rendered);
 }
 
-function getEventVerb(type, payload = {}) {
+function getEventVerb(type, _payload = {}) {
     const verbByType = {
         PushEvent: 'in',
         CreateEvent: 'in',
