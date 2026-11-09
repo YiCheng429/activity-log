@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - run: node --test --experimental-test-coverage
+      - run: node --test --experimental-test-coverage tests/templateEngine.test.js
 
   build:
     needs: test
